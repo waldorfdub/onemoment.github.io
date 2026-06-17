@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+<title>OneMoment — обмен наличных</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   OneMoment Mini App — фирменная сине-навигационная гамма (по логотипу)
+   Акцент: синий градиент --brand → --brand-2 на тёмно-синем фоне.
+   По умолчанию — тёмная тема как у бренда; для светлой темы Telegram
+   поверхности автоматически осветляются (см. JS-маппинг темы).
+   ============================================================ */
+:root{
+  --brand:#2E7BFF; --brand-2:#4FB6FF; --brand-press:#1F62E0; --on-brand:#FFFFFF;
+  --brand-soft:rgba(46,123,255,.16);
+  --rub:#2F80ED; --usdt:#26A17B;
+  /* тёмно-синяя тема бренда (фон логотипа) */
+  --bg:#0B1326; --surface:#141F38; --surface-2:#1B2843;
+  --text:#EAF1FB; --text-2:#9FB1CE; --hint:#6B7E9E;
+  --border:rgba(255,255,255,.08); --warn:#F2B05A; --warn-soft:rgba(242,176,90,.14);
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 12px 32px rgba(4,10,24,.5);
+  --radius:18px;
+}
+@media (prefers-color-scheme:light){:root{
+  --bg:#EEF3FA;--surface:#FFFFFF;--surface-2:#F1F5FB;--text:#0C1426;
+  --text-2:#51607A;--hint:#90A0BA;--border:rgba(12,20,38,.08);
+  --shadow:0 1px 2px rgba(12,20,38,.05),0 8px 24px rgba(12,20,38,.07);
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg);color:var(--text);font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.app{max-width:480px;margin:0 auto;padding:12px 16px calc(120px + env(safe-area-inset-bottom))}
+.hidden{display:none!important}
+
+/* Header */
+.header{display:flex;align-items:center;justify-content:space-between;padding:6px 2px 12px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:36px;height:36px;border-radius:10px;overflow:hidden;flex:none;
+  box-shadow:0 6px 16px var(--brand-soft);background:#0B132F}
+.brand-mark img{width:100%;height:100%;object-fit:cover;display:block}
+.brand-name{font-weight:800;font-size:18px;letter-spacing:-.02em}.brand-name span{color:var(--brand)}
+.status{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);font-weight:500;
+  background:var(--surface);border:1px solid var(--border);padding:6px 11px;border-radius:999px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--brand);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,123,255,.5)}70%{box-shadow:0 0 0 7px rgba(46,123,255,0)}100%{box-shadow:0 0 0 0 rgba(46,123,255,0)}}
+
+/* Rate strip */
+.rate-strip{display:flex;align-items:center;justify-content:space-between;
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:11px 14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.rate-strip .l{font-size:13px;color:var(--text-2);font-weight:600}
+.rate-strip .v{font-size:17px;font-weight:800;color:var(--brand);font-variant-numeric:tabular-nums}
+.rate-strip .tag{font-size:10.5px;color:var(--text-2);background:var(--surface-2);
+  padding:3px 8px;border-radius:6px;font-weight:700;margin-left:8px}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;margin-bottom:12px;box-shadow:var(--shadow);animation:rise .4s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.sec-head{display:flex;align-items:center;gap:8px;margin-bottom:13px}
+.sec-head .ic{color:var(--brand);flex:none}
+.sec-title{font-size:14.5px;font-weight:700;letter-spacing:-.01em}
+.sec-sub{font-size:12.5px;color:var(--hint);margin-left:auto;font-weight:600}
+
+/* Cities */
+.cities{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.city{appearance:none;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text);
+  border-radius:13px;padding:12px;text-align:left;font-size:13.5px;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;gap:8px;transition:border-color .15s,background .15s,transform .08s}
+.city:active{transform:scale(.97)}
+.city .pin{width:7px;height:7px;border-radius:50%;background:var(--hint);flex:none;transition:.15s}
+.city.sel{border-color:var(--brand);background:var(--brand-soft)}
+.city.sel .pin{background:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+
+/* Calculator */
+.dirline{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text-2);
+  margin-bottom:6px;flex-wrap:wrap}
+.dirline .arr{color:var(--brand)}
+.field{background:var(--surface-2);border:1.5px solid var(--border);border-radius:15px;
+  padding:13px 14px;transition:border-color .15s}
+.field.focus{border-color:var(--brand)}
+.field .lab{font-size:12px;color:var(--text-2);font-weight:600;margin-bottom:5px;display:flex;align-items:center;gap:5px}
+.field .lab .g{color:var(--brand)}
+.field .row{display:flex;align-items:center;gap:10px}
+.field input{flex:1;border:none;background:transparent;color:var(--text);font-size:26px;font-weight:800;
+  letter-spacing:-.02em;outline:none;width:100%;font-variant-numeric:tabular-nums;padding:0;min-width:0}
+.field input::placeholder{color:var(--hint);font-weight:700}
+.cur{display:flex;align-items:center;gap:8px;flex:none;background:var(--surface);border:1px solid var(--border);
+  padding:8px 11px;border-radius:11px;max-width:54%}
+.cur .badge{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:11px;
+  font-weight:800;color:#fff;flex:none}
+.cur.rub .badge{background:var(--rub)}.cur.usdt .badge{background:var(--usdt)}
+.cur .ct{min-width:0}
+.cur .nm{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cur .sub{font-size:10.5px;color:var(--hint);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.swap-wrap{display:flex;justify-content:center;height:0;position:relative;z-index:2}
+.swap{width:42px;height:42px;border-radius:13px;border:3px solid var(--surface);
+  background:linear-gradient(135deg,var(--brand),var(--brand-2));
+  color:var(--on-brand);cursor:pointer;display:grid;place-items:center;margin-top:-21px;
+  box-shadow:0 6px 16px var(--brand-soft);transition:transform .35s}
+.swap:active{transform:rotate(180deg) scale(.92)}
+.gap{height:9px}
+
+/* Office card */
+.office-top{display:flex;gap:12px;margin-bottom:10px}
+.photo{width:88px;height:88px;border-radius:13px;overflow:hidden;background:var(--surface-2);
+  border:1px solid var(--border);display:grid;place-items:center;text-align:center;color:var(--hint);
+  font-size:10px;font-weight:600;padding:6px;flex:none}
+.photo.wide{width:100%;height:auto;aspect-ratio:16/10}
+.photo img{width:100%;height:100%;object-fit:cover;display:block}
+.office-info .city-nm{font-weight:800;font-size:15px;margin-bottom:2px}
+.office-info .addr{font-size:13px;color:var(--text-2);font-weight:500;line-height:1.4}
+.hours{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.hours span{font-size:11.5px;font-weight:600;background:var(--surface-2);border:1px solid var(--border);
+  padding:4px 9px;border-radius:8px;color:var(--text-2)}
+.hours b{color:var(--text);font-weight:700}
+.ghost-btn{width:100%;border:1.5px dashed var(--brand);background:transparent;color:var(--brand);
+  font-weight:700;font-size:14px;padding:11px;border-radius:12px;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;gap:8px;transition:background .15s}
+.ghost-btn:active{background:var(--brand-soft)}
+.route{display:none;margin-top:10px;animation:rise .3s both}.route.show{display:block}
+.route-text{font-size:13px;color:var(--text-2);line-height:1.5;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:11px;padding:11px;margin-bottom:9px}
+.route-text b{color:var(--text)}
+
+/* Step 2: progress + timer */
+.progress-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow)}
+.progress-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.progress-head .st{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:var(--brand)}
+.progress-head .timer{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:800;
+  color:var(--text);font-variant-numeric:tabular-nums}
+.progress-head .timer.warn{color:var(--warn)}
+.pbar{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.pbar i{display:block;height:100%;width:35%;border-radius:99px;
+  background:linear-gradient(90deg,var(--brand),var(--brand-2));transition:width .3s}
+
+/* recap rows */
+.recap{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.recap .who{display:flex;align-items:center;gap:10px;min-width:0}
+.recap .amt{font-weight:800;font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* inputs */
+.input{width:100%;background:var(--surface-2);border:1.5px solid var(--border);border-radius:13px;
+  padding:13px 14px;color:var(--text);font-size:15px;font-weight:500;outline:none;transition:border-color .15s;
+  margin-bottom:10px;font-family:inherit}
+.input:focus{border-color:var(--brand)}.input::placeholder{color:var(--hint)}.input:last-child{margin-bottom:0}
+.input.mono{font-family:ui-monospace,Menlo,monospace;font-size:13.5px}
+.tg-wrap{position:relative}
+.tg-wrap .at{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--hint);font-weight:700;font-size:15px;pointer-events:none}
+.tg-wrap .input{padding-left:30px}
+.field-note{font-size:12px;color:var(--hint);font-weight:500;margin:-2px 2px 0}
+
+/* info / warning block */
+.warn-box{background:var(--warn-soft);border:1px solid rgba(240,160,75,.3);border-radius:13px;padding:13px;font-size:12.5px;line-height:1.55;color:var(--text-2)}
+.warn-box .wt{display:flex;align-items:center;gap:7px;font-weight:800;color:var(--warn);font-size:13px;margin-bottom:7px}
+.warn-box b{color:var(--text)}
+.collapse-arrow{margin-left:auto;color:var(--hint);transition:transform .25s;cursor:pointer}
+.collapse-arrow.open{transform:rotate(180deg)}
+
+/* bottom bar */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,var(--bg) 72%,transparent)}
+.bar-inner{max-width:480px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.back-btn{width:54px;height:54px;flex:none;border-radius:15px;border:1.5px solid var(--border);
+  background:var(--surface);color:var(--text);cursor:pointer;display:grid;place-items:center}
+.cta{flex:1;border:none;border-radius:15px;padding:16px;cursor:pointer;
+  background:linear-gradient(135deg,var(--brand),var(--brand-2));
+  color:var(--on-brand);font-size:16px;font-weight:800;letter-spacing:-.01em;box-shadow:0 8px 22px var(--brand-soft);
+  transition:transform .08s,opacity .15s;display:flex;align-items:center;justify-content:center;gap:9px}
+.cta:active{transform:scale(.985)}.cta:disabled{opacity:.45;box-shadow:none;cursor:not-allowed}
+.cta-hint{text-align:center;font-size:11.5px;color:var(--hint);margin-top:7px;font-weight:500}
+
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40;display:none;align-items:flex-end;backdrop-filter:blur(2px)}
+.overlay.show{display:flex}
+.sheet{background:var(--surface);width:100%;max-width:480px;margin:0 auto;border-radius:20px 20px 0 0;
+  padding:18px 18px calc(18px + env(safe-area-inset-bottom));animation:up .3s both}
+@keyframes up{from{transform:translateY(100%)}to{transform:none}}
+.sheet h3{margin:0 0 4px;font-size:17px;font-weight:800}
+.sheet p.sub{margin:0 0 14px;font-size:13px;color:var(--text-2)}
+.preview{background:var(--surface-2);border:1px solid var(--border);border-radius:13px;padding:14px;
+  font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;
+  font-family:ui-monospace,Menlo,monospace;max-height:42vh;overflow:auto}
+.sheet-actions{display:flex;gap:9px;margin-top:14px}
+.sheet-actions button{flex:1;padding:13px;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;border:none}
+.btn-primary{background:var(--brand);color:var(--on-brand)}
+.btn-second{background:var(--surface-2);color:var(--text);border:1px solid var(--border)!important}
+.err{color:#F0506E;font-size:12.5px;font-weight:600;margin-top:8px;display:none}.err.show{display:block}
+
+/* screen 3 — выдача средств */
+.s3-title{font-size:23px;font-weight:800;letter-spacing:-.02em;margin:2px 2px 2px}
+.s3-sub{font-size:13.5px;color:var(--text-2);margin:0 2px 12px;font-weight:500}
+.map{position:relative;width:100%;aspect-ratio:16/10;border-radius:13px;overflow:hidden;border:1px solid var(--border);background:var(--surface-2)}
+.map iframe{width:100%;height:100%;border:0;display:block}
+.map .ph{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--hint);font-size:12.5px;font-weight:600;padding:14px;line-height:1.5}
+.open-maps{position:absolute;left:10px;bottom:10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 11px;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;box-shadow:var(--shadow);text-decoration:none}
+.open-maps svg{color:var(--brand)}
+.divider{height:1px;background:var(--border);margin:4px 0}
+.kv{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0}
+.kv .k{font-size:12.5px;color:var(--text-2);font-weight:600;flex:none}
+.kv .v{font-weight:700;font-size:14px;text-align:right;word-break:break-word}
+.kv .rv{display:flex;align-items:center;gap:9px;min-width:0;justify-content:flex-end}
+.amt2{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cur.mini{padding:5px 9px;max-width:none}
+.cur.mini .sub{display:none}.cur.mini .nm{font-size:11.5px}
+.cur.mini .badge{width:18px;height:18px;font-size:9px}
+.dt{font-weight:700;font-size:13px;background:var(--surface-2);border:1px solid var(--border);padding:6px 10px;border-radius:9px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wallet{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}
+.ordno{color:var(--brand);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<!-- ======================= SCREEN 1 — CALCULATOR ======================= -->
+<div class="app" id="screen1">
+  <header class="header">
+    <div class="brand"><div class="brand-mark"><img src="data:image/jpeg;base64,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" alt="OneMoment"></div><div class="brand-name">One<span>Moment</span></div></div>
+    <div class="status"><span class="dot"></span> Онлайн 24/7</div>
+  </header>
+
+  <div class="rate-strip">
+    <span class="l">Курс обмена</span>
+    <span><span class="v" id="rateV">89.00 ₽</span><span class="tag" id="rateTag">за 1 USDT</span></span>
+  </div>
+
+  <!-- City -->
+  <section class="card">
+    <div class="sec-head">
+      <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      <div class="sec-title">Город обмена</div>
+      <div class="sec-sub" id="citySub">выберите офис</div>
+    </div>
+    <div class="cities" id="cities"></div>
+  </section>
+
+  <!-- Calculator -->
+  <section class="card">
+    <div class="dirline">
+      <span id="dirFrom">Нал. рубли</span><span class="arr">→</span><span id="dirTo">USDT TRC20</span>
+    </div>
+
+    <div class="field" id="fieldGive">
+      <div class="lab"><span class="g">↗</span> Что отдаёте?</div>
+      <div class="row">
+        <input id="giveInput" type="text" inputmode="decimal" placeholder="0" />
+        <div class="cur rub" id="giveCur"></div>
+      </div>
+    </div>
+
+    <div class="swap-wrap"><button class="swap" id="swapBtn" aria-label="Сменить направление">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 4v13m0 0l-3-3m3 3l3-3M17 20V7m0 0l-3 3m3-3l3 3"/></svg>
+    </button></div>
+    <div class="gap"></div>
+
+    <div class="field" id="fieldGet">
+      <div class="lab"><span class="g">↘</span> Что получаете?</div>
+      <div class="row">
+        <input id="getInput" type="text" inputmode="decimal" placeholder="0" />
+        <div class="cur usdt" id="getCur"></div>
+      </div>
+    </div>
+    <div class="err" id="amtErr">Введите сумму больше нуля</div>
+  </section>
+
+  <!-- Office -->
+  <section class="card" id="officeCard" style="display:none">
+    <div class="sec-head">
+      <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      <div class="sec-title">Где будет проведена сделка?</div>
+    </div>
+    <div class="office-top">
+      <div class="photo" id="offPhoto">Фото офиса</div>
+      <div class="office-info">
+        <div class="city-nm" id="offCity">—</div>
+        <div class="addr" id="offAddr">—</div>
+      </div>
+    </div>
+    <div class="hours" id="offHours"></div>
+    <button class="ghost-btn" id="routeBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l5-5-5-5M13 17l5-5-5-5"/></svg>
+      Как пройти?
+    </button>
+    <div class="route" id="route">
+      <div class="route-text" id="routeText">Маршрут уточняется.</div>
+      <div class="photo wide" id="routeImg">Схема прохода</div>
+    </div>
+  </section>
+</div>
+
+<!-- ======================= SCREEN 2 — ORDER ======================= -->
+<div class="app hidden" id="screen2">
+  <header class="header">
+    <div class="brand"><div class="brand-mark"><img src="data:image/jpeg;base64,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" alt="OneMoment"></div><div class="brand-name">One<span>Moment</span></div></div>
+    <div class="status"><span class="dot"></span> Заявка</div>
+  </header>
+
+  <div class="progress-wrap">
+    <div class="progress-head">
+      <div class="st"><span class="dot"></span> Создана</div>
+      <div class="timer" id="timer">30:00</div>
+    </div>
+    <div class="pbar"><i id="pbarFill"></i></div>
+  </div>
+
+  <!-- Office recap -->
+  <section class="card">
+    <div class="sec-head">
+      <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+      <div class="sec-title">Где проведём сделку?</div>
+    </div>
+    <div class="office-top">
+      <div class="photo" id="offPhoto2">Фото офиса</div>
+      <div class="office-info">
+        <div class="city-nm" id="offCity2">—</div>
+        <div class="addr" id="offAddr2">—</div>
+      </div>
+    </div>
+    <div class="hours" id="offHours2"></div>
+    <button class="ghost-btn" id="routeBtn2">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l5-5-5-5M13 17l5-5-5-5"/></svg>
+      Как пройти?
+    </button>
+    <div class="route" id="route2">
+      <div class="route-text" id="routeText2"></div>
+      <div class="photo wide" id="routeImg2">Схема прохода</div>
+    </div>
+  </section>
+
+  <!-- Give recap -->
+  <section class="card">
+    <div class="sec-head"><div class="sec-title">Что отдаёте</div></div>
+    <div class="recap">
+      <div class="who"><div class="cur rub" id="recapGiveCur"></div></div>
+      <div class="amt" id="recapGiveAmt">—</div>
+    </div>
+  </section>
+
+  <!-- Receive: wallet or cash -->
+  <section class="card">
+    <div class="sec-head"><div class="sec-title" id="recvTitle">Куда принимаете</div></div>
+    <div id="walletWrap">
+      <input class="input mono" id="walletInput" type="text" placeholder="Укажите кошелёк USDT в сети TRC20" autocomplete="off" />
+      <div class="field-note">Адрес начинается с «T», 34 символа</div>
+    </div>
+    <div class="recap" id="cashRecv" style="display:none">
+      <div class="who"><div class="cur rub" id="recapGetCur"></div></div>
+      <div class="amt" id="recapGetAmt">—</div>
+    </div>
+  </section>
+
+  <!-- Contact -->
+  <section class="card">
+    <div class="sec-head"><div class="sec-title">Ваши данные</div></div>
+    <input class="input" id="nameInput" type="text" placeholder="Имя" autocomplete="off" />
+    <div class="tg-wrap"><span class="at">@</span>
+      <input class="input" id="tgInput" type="text" placeholder="username в Telegram" autocomplete="off" /></div>
+    <div class="err" id="contactErr">Заполните имя, Telegram-тег и кошелёк</div>
+  </section>
+
+  <!-- Info / warning -->
+  <section class="card">
+    <div class="sec-head">
+      <div class="sec-title">Информация о заявке</div>
+      <svg class="collapse-arrow" id="infoArrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <div class="warn-box" id="infoBox">
+      <div class="wt">⚠ Обращаем внимание</div>
+      <b>Курс фиксируется только после пересчёта средств в кассе офиса.</b> После оформления свяжитесь с оператором по номеру заявки, чтобы согласовать время встречи.<br><br>
+      При себе иметь <b>паспорт или водительское удостоверение</b> для пропуска в бизнес-центр. При первом визите проводится верификация и подписание договора купли-продажи криптовалюты.
+    </div>
+  </section>
+</div>
+
+<!-- ======================= SCREEN 3 — ВЫДАЧА СРЕДСТВ ======================= -->
+<div class="app hidden" id="screen3">
+  <header class="header">
+    <div class="brand"><div class="brand-mark"><img src="data:image/jpeg;base64,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" alt="OneMoment"></div><div class="brand-name">One<span>Moment</span></div></div>
+    <div class="status"><span class="dot"></span> Выдача</div>
+  </header>
+
+  <div class="progress-wrap">
+    <div class="progress-head">
+      <div class="st"><span class="dot"></span> Выдача средств</div>
+      <div class="timer" id="timer3">00:00</div>
+    </div>
+    <div class="pbar"><i style="width:92%"></i></div>
+  </div>
+
+  <h2 class="s3-title">Выдача средств</h2>
+  <p class="s3-sub">Ожидаем вас в нашем офисе</p>
+
+  <section class="card">
+    <div class="map">
+      <iframe id="mapFrame" style="display:none" loading="lazy" referrerpolicy="no-referrer"></iframe>
+      <div class="ph" id="mapPh">Карта появится после<br>указания координат офиса</div>
+      <a class="open-maps" id="openMaps" role="button" tabindex="0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.6-7-11a7 7 0 0 1 14 0c0 5.4-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+        Открыть в Картах
+      </a>
+    </div>
+    <div class="office-top" style="margin-top:12px">
+      <div class="photo" id="offPhoto3">Фото офиса</div>
+      <div class="office-info">
+        <div class="sec-sub" style="margin:0 0 3px">Место встречи</div>
+        <div class="city-nm" id="offCity3">—</div>
+        <div class="addr" id="offAddr3">—</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="kv"><span class="k">Дата и время встречи</span><span class="dt" id="meetDate">—</span></div>
+    <div class="sec-sub" style="margin:8px 0 6px 2px">Рабочие часы</div>
+    <div class="hours" id="offHours3"></div>
+  </section>
+
+  <section class="card">
+    <div class="sec-head"><div class="sec-title">Информация о заявке</div></div>
+    <div class="kv"><span class="k">Номер сделки</span><span class="v ordno" id="orderNo">#OM-00000</span></div>
+    <div class="divider"></div>
+    <div class="kv"><span class="k">Отдаёте</span><span class="rv"><b class="amt2" id="s3giveAmt">—</b><span class="cur mini" id="s3giveCur"></span></span></div>
+    <div class="kv"><span class="k">Принимаете</span><span class="rv"><b class="amt2" id="s3getAmt">—</b><span class="cur mini" id="s3getCur"></span></span></div>
+    <div class="divider"></div>
+    <div class="kv"><span class="k">Контакт</span><span class="v" id="s3name">—</span></div>
+    <div class="kv"><span class="k">Место сделки</span><span class="v" id="s3place">—</span></div>
+    <div class="kv" id="walletRow"><span class="k" id="walletK">Куда принимаете</span><span class="rv"><span class="wallet" id="s3wallet">—</span><span class="cur mini" id="s3walletCur"></span></span></div>
+  </section>
+</div>
+
+<!-- ======================= BOTTOM BAR ======================= -->
+<div class="bar">
+  <div class="bar-inner">
+    <button class="back-btn hidden" id="backBtn" aria-label="Назад">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <button class="cta" id="mainBtn" disabled>
+      <span id="mainBtnText">Обменять валюту</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+  <div class="cta-hint" id="ctaHint">Выберите город и укажите сумму</div>
+</div>
+
+<!-- ======================= MODAL ======================= -->
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <h3>✅ Заявка сформирована</h3>
+    <p class="sub">Так её увидит оператор:</p>
+    <div class="preview" id="previewBox"></div>
+    <div class="sheet-actions">
+      <button class="btn-second" id="copyBtn">Скопировать</button>
+      <button class="btn-primary" id="openBtn">Написать оператору</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   НАСТРОЙКИ — правьте только этот блок
+   ============================================================ */
+const CONFIG = {
+  OPERATOR:'onemoment_fiat',     // username оператора без @
+  RATE_API_URL:'',               // напр. 'https://api.вашдомен.ru/rate' → {"rub_per_usdt":89}
+  DEFAULT_RATE:89,               // запасной курс RUB за 1 USDT
+  HOURS:[['пн–пт','11:00–19:00'],['сб','11:00–18:00'],['вс','выходной']],
+  RESERVE_MIN:30,                // минут на «резерв курса» (таймер)
+  CITIES:[
+    {name:'Москва',           addr:'ул. ____, оф. ___', photo:'', route:'', lat:'', lon:'', routeText:'Главный вход → атриум → ресепшн (заполните маршрут).'},
+    {name:'Чебоксары',        addr:'ул. ____, оф. ___', photo:'', route:'', lat:'', lon:'', routeText:''},
+    {name:'Магнитогорск',     addr:'ул. ____, оф. ___', photo:'', route:'', lat:'', lon:'', routeText:''},
+    {name:'Нижний Новгород',  addr:'ул. ____, оф. ___', photo:'', route:'', lat:'', lon:'', routeText:''},
+    {name:'Красноярск',       addr:'ул. ____, оф. ___', photo:'', route:'', lat:'', lon:'', routeText:''},
+    {name:'Йошкар-Ола',       addr:'ул. ____, оф. ___', photo:'', route:'', lat:'', lon:'', routeText:''},
+    {name:'Набережные Челны', addr:'ул. ____, оф. ___', photo:'', route:'', lat:'', lon:'', routeText:''},
+    {name:'Челябинск',        addr:'ул. ____, оф. ___', photo:'', route:'', lat:'', lon:'', routeText:''},
+  ]
+};
+
+/* ---------- Telegram init ---------- */
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if(tg){ tg.ready(); tg.expand();
+  const p=tg.themeParams||{}, set=(k,v)=>v&&document.documentElement.style.setProperty(k,v);
+  set('--bg',p.bg_color); set('--surface',p.secondary_bg_color||p.section_bg_color);
+  set('--surface-2',p.bg_color); set('--text',p.text_color);
+  set('--text-2',p.subtitle_text_color||p.hint_color); set('--hint',p.hint_color);
+}
+function haptic(t){ try{ tg&&tg.HapticFeedback&&tg.HapticFeedback.impactOccurred(t||'light'); }catch(e){} }
+
+/* ---------- State ---------- */
+const S={ city:null, dir:'rub2usdt', rate:CONFIG.DEFAULT_RATE, give:0, get:0, last:'give', step:1 };
+const $=id=>document.getElementById(id);
+const fmt=(n,d)=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:d}).format(n);
+const parseNum=v=>parseFloat((v||'').replace(/\s/g,'').replace(',','.'))||0;
+const isUSDTrecv=()=>S.dir==='rub2usdt';   // клиент получает USDT → нужен кошелёк
+
+/* ---------- Rate ---------- */
+function renderRate(){ $('rateV').textContent=fmt(S.rate,2)+' ₽'; }
+async function loadRate(){
+  if(!CONFIG.RATE_API_URL) return;
+  try{ const d=await(await fetch(CONFIG.RATE_API_URL)).json();
+    if(d&&d.rub_per_usdt){ S.rate=Number(d.rub_per_usdt); $('rateTag').textContent='актуальный'; recalc(); renderRate(); }
+  }catch(e){}
+}
+
+/* ---------- Currency pill renderer ---------- */
+function pill(el,kind){ // kind: 'cash' | 'usdt'
+  if(kind==='cash'){ el.className='cur rub';
+    el.innerHTML=`<span class="badge">₽</span><div class="ct"><div class="nm">Нал. рубли</div><div class="sub">${S.city?S.city.name:'выберите город'}</div></div>`;
+  } else { el.className='cur usdt';
+    el.innerHTML=`<span class="badge">₮</span><div class="ct"><div class="nm">USDT TRC20</div><div class="sub">сеть TRON</div></div>`;
+  }
+}
+function applyDir(){
+  const r2u=S.dir==='rub2usdt';
+  $('dirFrom').textContent=r2u?'Нал. рубли':'USDT TRC20';
+  $('dirTo').textContent  =r2u?'USDT TRC20':'Нал. рубли';
+  pill($('giveCur'), r2u?'cash':'usdt');
+  pill($('getCur'),  r2u?'usdt':'cash');
+  document.querySelectorAll('.swap').forEach(()=>{});
+  recalc();
+}
+
+/* ---------- Cities ---------- */
+CONFIG.CITIES.forEach(c=>{
+  const b=document.createElement('button'); b.className='city';
+  b.innerHTML=`<span class="pin"></span>${c.name}`;
+  b.onclick=()=>{ document.querySelectorAll('.city').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel'); S.city=c; haptic('light'); $('citySub').textContent=c.name;
+    showOffice(); applyDir(); validate(); };
+  $('cities').appendChild(b);
+});
+function hoursHTML(){ return CONFIG.HOURS.map(h=>`<span>${h[0]} <b>${h[1]}</b></span>`).join(''); }
+function fillPhoto(el,url,fb){ if(url){el.innerHTML='';const i=new Image();i.src=url;i.alt=fb;el.appendChild(i);} else el.textContent=fb; }
+function showOffice(){
+  const c=S.city; if(!c) return;
+  $('officeCard').style.display='block';
+  $('offCity').textContent=c.name; $('offAddr').textContent='г. '+c.name+', '+c.addr;
+  $('offHours').innerHTML=hoursHTML();
+  $('routeText').textContent=c.routeText||'Маршрут уточняйте у оператора.';
+  fillPhoto($('offPhoto'),c.photo,'Фото офиса');
+  fillPhoto($('routeImg'),c.route,'Схема прохода');
+  $('route').classList.remove('show');
+}
+$('routeBtn').onclick=()=>{ $('route').classList.toggle('show'); haptic('light'); };
+$('routeBtn2').onclick=()=>{ $('route2').classList.toggle('show'); haptic('light'); };
+
+/* ---------- Calculator ---------- */
+const giveInput=$('giveInput'), getInput=$('getInput');
+function recalc(){
+  const r2u=S.dir==='rub2usdt';
+  if(S.last==='give'){ const g=parseNum(giveInput.value); const r=r2u?g/S.rate:g*S.rate;
+    getInput.value=g?fmt(r,r2u?2:0):''; S.give=g; S.get=r;
+  } else { const g=parseNum(getInput.value); const r=r2u?g*S.rate:g/S.rate;
+    giveInput.value=g?fmt(r,r2u?0:2):''; S.get=g; S.give=r; }
+  validate();
+}
+giveInput.addEventListener('input',()=>{S.last='give';recalc();});
+getInput.addEventListener('input',()=>{S.last='get';recalc();});
+[giveInput,getInput].forEach(i=>{i.addEventListener('focus',()=>i.closest('.field').classList.add('focus'));
+  i.addEventListener('blur',()=>i.closest('.field').classList.remove('focus'));});
+$('swapBtn').onclick=()=>{ S.dir=S.dir==='rub2usdt'?'usdt2rub':'rub2usdt'; haptic('medium'); applyDir(); };
+
+/* ---------- Step 2 contacts ---------- */
+['nameInput','tgInput','walletInput'].forEach(id=>$(id).addEventListener('input',validate));
+$('infoArrow').parentElement.style.cursor='pointer';
+$('infoArrow').parentElement.onclick=()=>{ const b=$('infoBox'),a=$('infoArrow');
+  const open=b.style.display!=='none'; b.style.display=open?'none':'block'; a.classList.toggle('open',!open); };
+
+/* ---------- pills (compact) ---------- */
+function pillMini(el,kind){
+  if(kind==='cash'){ el.className='cur mini rub'; el.innerHTML='<span class="badge">\u20bd</span><span class="nm">\u041d\u0430\u043b. \u0440\u0443\u0431\u043b\u0438</span>'; }
+  else { el.className='cur mini usdt'; el.innerHTML='<span class="badge">\u20ae</span><span class="nm">USDT TRC20</span>'; }
+}
+
+/* ---------- Validation + main button ---------- */
+function validate(){
+  const okCity=!!S.city, okAmt=S.give>0&&S.get>0;
+  if(S.step===1){
+    const ok=okCity&&okAmt; $('mainBtn').disabled=!ok;
+    $('ctaHint').textContent=!okCity?'Выберите город обмена':!okAmt?'Укажите сумму обмена':'Всё готово — продолжаем';
+    return ok;
+  }
+  if(S.step===2){
+    const okName=$('nameInput').value.trim(), okTg=$('tgInput').value.trim();
+    const okWallet=!isUSDTrecv()||$('walletInput').value.trim().length>=10;
+    const ok=okName&&okTg&&okWallet; $('mainBtn').disabled=!ok;
+    $('ctaHint').textContent=ok?'Создаём заявку':(!okWallet?'Укажите кошелёк USDT TRC20':'Заполните имя и Telegram-тег');
+    return ok;
+  }
+  $('mainBtn').disabled=false;
+  $('ctaHint').textContent='Свяжитесь с оператором для подтверждения встречи';
+  return true;
+}
+
+/* ---------- Step navigation (3 экрана) ---------- */
+function goStep(n){
+  if(n<1) n=1; if(n>3) n=3;
+  S.step=n; haptic('light'); window.scrollTo(0,0);
+  $('screen1').classList.toggle('hidden', n!==1);
+  $('screen2').classList.toggle('hidden', n!==2);
+  $('screen3').classList.toggle('hidden', n!==3);
+  $('backBtn').classList.toggle('hidden', n===1);
+  if(n===1){ $('mainBtnText').textContent='Обменять валюту'; stopTimer(); }
+  if(n===2){ $('mainBtnText').textContent='Обменять валюту'; fillStep2(); startTimer(); }
+  if(n===3){ $('mainBtnText').textContent='Написать оператору'; stopTimer(); createOrder(); }
+  validate();
+}
+function fillStep2(){
+  const c=S.city, r2u=S.dir==='rub2usdt';
+  $('offCity2').textContent=c.name; $('offAddr2').textContent='г. '+c.name+', '+c.addr;
+  $('offHours2').innerHTML=hoursHTML(); $('routeText2').textContent=c.routeText||'Маршрут уточняйте у оператора.';
+  fillPhoto($('offPhoto2'),c.photo,'Фото офиса'); fillPhoto($('routeImg2'),c.route,'Схема прохода');
+  pill($('recapGiveCur'), r2u?'cash':'usdt');
+  $('recapGiveAmt').textContent = r2u?fmt(S.give,0)+' ₽':fmt(S.give,2)+' USDT';
+  if(r2u){ $('recvTitle').textContent='Куда принимаете'; $('walletWrap').style.display='block'; $('cashRecv').style.display='none'; }
+  else   { $('recvTitle').textContent='Что получаете'; $('walletWrap').style.display='none'; $('cashRecv').style.display='flex';
+           pill($('recapGetCur'),'cash'); $('recapGetAmt').textContent=fmt(S.get,0)+' ₽'; }
+}
+
+/* ---------- Timer ---------- */
+let timerInt=null;
+function startTimer(){
+  stopTimer(); let total=CONFIG.RESERVE_MIN*60, t=total;
+  const el=$('timer'), bar=$('pbarFill');
+  const tick=()=>{ const m=String(Math.floor(t/60)).padStart(2,'0'), s=String(t%60).padStart(2,'0');
+    el.textContent=m+':'+s; bar.style.width=(35+55*(t/total))+'%';
+    el.classList.toggle('warn', t<=120);
+    if(t<=0){ stopTimer(); el.textContent='00:00'; }
+    t--; };
+  tick(); timerInt=setInterval(tick,1000);
+}
+function stopTimer(){ if(timerInt){clearInterval(timerInt);timerInt=null;} }
+
+/* ---------- Создание заявки (экран 3) ---------- */
+function genOrderNo(){ return '#OM-'+Math.floor(10000+Math.random()*89999); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function meetingStr(){ const d=new Date(Date.now()+30*60000);
+  return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+'  '+pad(d.getHours())+':'+pad(d.getMinutes()); }
+function mapsUrl(c){ if(c.lat&&c.lon) return 'https://yandex.ru/maps/?pt='+c.lon+','+c.lat+'&z=17&l=map';
+  return 'https://yandex.ru/maps/?text='+encodeURIComponent('г. '+c.name+', '+c.addr); }
+function createOrder(){
+  const c=S.city, r2u=S.dir==='rub2usdt';
+  if(!S.orderNo) S.orderNo=genOrderNo();
+  // карта
+  const frame=$('mapFrame'), ph=$('mapPh');
+  if(c.lat&&c.lon){ const bb=[(c.lon-0.006),(c.lat-0.004),(c.lon+0.006),(c.lat+0.004)].join('%2C');
+    frame.src='https://www.openstreetmap.org/export/embed.html?bbox='+bb+'&layer=mapnik&marker='+c.lat+'%2C'+c.lon;
+    frame.style.display='block'; ph.style.display='none';
+  } else { frame.style.display='none'; ph.style.display='grid'; }
+  $('openMaps').onclick=()=>{ const u=mapsUrl(c); (tg&&tg.openLink)?tg.openLink(u):window.open(u,'_blank'); };
+  // место встречи
+  $('offCity3').textContent=c.name;
+  $('offAddr3').textContent='г. '+c.name+', '+c.addr+(c.routeText?'. '+c.routeText:'');
+  fillPhoto($('offPhoto3'),c.photo,'Фото офиса'); $('offHours3').innerHTML=hoursHTML();
+  $('meetDate').textContent=meetingStr();
+  // информация о заявке
+  $('orderNo').textContent=S.orderNo;
+  pillMini($('s3giveCur'), r2u?'cash':'usdt'); $('s3giveAmt').textContent = r2u?fmt(S.give,0)+' ₽':fmt(S.give,2)+' ₮';
+  pillMini($('s3getCur'),  r2u?'usdt':'cash'); $('s3getAmt').textContent  = r2u?fmt(S.get,2)+' ₮':fmt(S.get,0)+' ₽';
+  $('s3name').textContent=$('nameInput').value.trim();
+  $('s3place').textContent=c.name;
+  if(r2u){ $('walletK').textContent='Куда принимаете'; $('s3wallet').textContent=$('walletInput').value.trim()||'—';
+           $('s3wallet').style.fontFamily='ui-monospace,Menlo,monospace'; pillMini($('s3walletCur'),'usdt'); }
+  else   { $('walletK').textContent='Получение'; $('s3wallet').textContent='Наличными в офисе';
+           $('s3wallet').style.fontFamily='inherit'; pillMini($('s3walletCur'),'cash'); }
+}
+
+/* ---------- Main / back ---------- */
+$('mainBtn').onclick=()=>{ if(!validate())return;
+  if(S.step===1){ goStep(2); return; }
+  if(S.step===2){ goStep(3); return; }
+  haptic('medium'); submitOrder();
+};
+$('backBtn').onclick=()=>goStep(S.step-1);
+
+/* ---------- Build & send ---------- */
+function buildOrder(){
+  const r2u=S.dir==='rub2usdt', tag=$('tgInput').value.trim().replace(/^@/,'');
+  return { orderNo:S.orderNo||genOrderNo(), city:S.city.name, office:'г. '+S.city.name+', '+S.city.addr,
+    meeting:meetingStr(), direction:r2u?'Нал. RUB → USDT TRC20':'USDT TRC20 → Нал. RUB',
+    give:r2u?fmt(S.give,0)+' RUB':fmt(S.give,2)+' USDT', get:r2u?fmt(S.get,2)+' USDT':fmt(S.get,0)+' RUB',
+    rate:'1 USDT = '+fmt(S.rate,2)+' RUB', wallet:r2u?($('walletInput').value.trim()||'—'):'наличными в офисе',
+    name:$('nameInput').value.trim(), telegram:'@'+tag };
+}
+function orderText(o){
+  return '🟢 НОВАЯ ЗАЯВКА · OneMoment '+o.orderNo+'\n\n'+
+    '🏙 Город: '+o.city+'\n📍 Офис: '+o.office+'\n🗓 Встреча: '+o.meeting+'\n'+
+    '🔄 Направление: '+o.direction+'\n💸 Отдаёт: '+o.give+'\n💰 Получает: '+o.get+'\n'+
+    '📈 Курс: '+o.rate+'\n👛 Кошелёк/выдача: '+o.wallet+'\n\n'+
+    '👤 Имя: '+o.name+'\n✈️ Telegram: '+o.telegram;
+}
+function submitOrder(){
+  const o=buildOrder(), text=orderText(o);
+  if(tg&&tg.sendData){ tg.sendData(JSON.stringify(o)); return; }
+  $('previewBox').textContent=text; $('overlay').classList.add('show');
+  $('copyBtn').onclick=async()=>{ try{ await navigator.clipboard.writeText(text); $('copyBtn').textContent='Скопировано ✓'; }catch(e){} };
+  $('openBtn').onclick=()=>{ const u='https://t.me/'+CONFIG.OPERATOR; (tg&&tg.openTelegramLink)?tg.openTelegramLink(u):window.open(u,'_blank'); };
+}
+$('overlay').onclick=e=>{ if(e.target.id==='overlay') e.target.classList.remove('show'); };
+
+/* ---------- Start ---------- */
+applyDir(); renderRate(); loadRate(); validate();
+</script>
+</body>
+</html>
