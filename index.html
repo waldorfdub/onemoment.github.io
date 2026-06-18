@@ -217,8 +217,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
 .ordno{color:var(--brand);font-variant-numeric:tabular-nums}
 
 /* всплывающий блок офиса (ховер на десктопе / тап на мобильном) */
-.office-trigger{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:12px;cursor:pointer;animation:rise .4s both;z-index:5}
-.office-trigger.open{z-index:30}
+.office-trigger{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:12px;cursor:pointer;animation:rise .4s both;overflow:hidden}
 .ot-row{display:flex;align-items:center;gap:10px;padding:15px 16px}
 .ot-row .ic{color:var(--brand);flex:none}
 .ot-text{flex:1;min-width:0}
@@ -226,8 +225,10 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
 .ot-city{font-size:12.5px;color:var(--text-2);font-weight:600;margin-top:1px}
 .ot-chevron{color:var(--hint);flex:none;transition:transform .25s}
 .office-trigger:hover .ot-chevron,.office-trigger.open .ot-chevron{transform:rotate(180deg)}
-.office-pop{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 16px 44px rgba(4,10,24,.55);padding:16px;z-index:30;opacity:0;visibility:hidden;transform:translateY(-6px);transition:opacity .18s,transform .18s,visibility .18s}
-.office-trigger:hover .office-pop,.office-trigger.open .office-pop{opacity:1;visibility:visible;transform:none}
+.office-pop{display:none;padding:14px 16px 16px;border-top:1px solid var(--border)}
+.office-trigger:hover .office-pop,.office-trigger.open .office-pop{display:block}
+.min-info{font-size:12px;font-weight:600;color:var(--hint);margin-top:10px}
+.min-info.bad{color:#F0506E}
 </style>
 </head>
 <body>
@@ -280,7 +281,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans
         <div class="cur usdt" id="getCur"></div>
       </div>
     </div>
-    <div class="err" id="amtErr">Введите сумму больше нуля</div>
+    <div class="min-info" id="minInfo">Минимальная сумма обмена — 150 000 ₽</div>
   </section>
 
   <!-- Office -->
@@ -474,19 +475,21 @@ const CONFIG = {
   OPERATOR:'onemoment_fiat',     // username оператора без @
   RATE_API_URL:'',               // напр. 'https://api.вашдомен.ru/rate' → {"rub_per_usdt":89}
   DEFAULT_RATE:89,               // запасной курс RUB за 1 USDT
+  MIN_RUB:150000,                // минимальная сумма обмена в рублях
+  MIN_USDT:1500,                 // минимальная сумма обмена в USDT
   RESERVE_MIN:30,                // минут на «резерв курса» (таймер)
   // Города: addr — полный адрес, hours — часы работы, tz — часовой пояс.
   // lat/lon — координаты для карты (без них «Открыть в Картах» ищет по адресу).
   // photo/route — ссылки на фото офиса и схему прохода. routeText — описание маршрута.
   CITIES:[
     {name:'Москва',           hours:'12:00–21:00', tz:'мск',    addr:'Москва, Пресненская наб., 12, Башня Федерация (Запад)', photo:'', route:'', routeText:'', lat:'', lon:''},
-    {name:'Чебоксары',        hours:'10:00–20:00', tz:'мск',    addr:'Чувашская Республика, г. Чебоксары, ул. Юрия Гагарина, 55, БЦ Palladium, офис 201 (2 этаж)', photo:'', route:'', routeText:'', lat:'', lon:''},
-    {name:'Магнитогорск',     hours:'12:00–20:00', tz:'мск +2', addr:'Челябинская обл., г. Магнитогорск, пр. Ленина, 92, коворкинг «Здесь», офис 309', photo:'', route:'', routeText:'', lat:'', lon:''},
-    {name:'Нижний Новгород',  hours:'10:00–18:00', tz:'мск',    addr:'Нижегородская обл., г. Нижний Новгород, ул. Тимирязева, 15к2, офис 201 (П16)', photo:'', route:'', routeText:'', lat:'', lon:''},
-    {name:'Красноярск',       hours:'12:00–20:00', tz:'мск +4', addr:'Красноярский край, г. Красноярск, ул. Караульная, 88, БЦ «Дубль», офис 530 (5 этаж)', photo:'', route:'', routeText:'', lat:'', lon:''},
-    {name:'Йошкар-Ола',       hours:'12:00–20:00', tz:'мск',    addr:'Республика Марий-Эл, г. Йошкар-Ола, ул. 70-летия Вооружённых Сил, 20, офис 206 (2 этаж)', photo:'', route:'', routeText:'', lat:'', lon:''},
-    {name:'Набережные Челны', hours:'10:00–19:00', tz:'мск',    addr:'Республика Татарстан, г. Набережные Челны, пр. Хасана Туфана, 12, БЦ «2.18», офис 608 (6 этаж)', photo:'', route:'', routeText:'', lat:'', lon:''},
-    {name:'Челябинск',        hours:'11:00–20:00', tz:'мск +2', addr:'Челябинская обл., г. Челябинск, пр. Ленина, 21В, офис 002 (цокольный этаж)', photo:'', route:'', routeText:'', lat:'', lon:''},
+    {name:'Чебоксары',        hours:'10:00–20:00', tz:'мск',    addr:'Чувашская Республика, г. Чебоксары, ул. Юрия Гагарина, 55, БЦ Palladium', photo:'', route:'', routeText:'', lat:'', lon:''},
+    {name:'Магнитогорск',     hours:'12:00–20:00', tz:'мск +2', addr:'Челябинская обл., г. Магнитогорск, пр. Ленина, 92, коворкинг «Здесь»', photo:'', route:'', routeText:'', lat:'', lon:''},
+    {name:'Нижний Новгород',  hours:'10:00–18:00', tz:'мск',    addr:'Нижегородская обл., г. Нижний Новгород, ул. Тимирязева, 15к2', photo:'', route:'', routeText:'', lat:'', lon:''},
+    {name:'Красноярск',       hours:'12:00–20:00', tz:'мск +4', addr:'Красноярский край, г. Красноярск, ул. Караульная, 88, БЦ «Дубль»', photo:'', route:'', routeText:'', lat:'', lon:''},
+    {name:'Йошкар-Ола',       hours:'12:00–20:00', tz:'мск',    addr:'Республика Марий-Эл, г. Йошкар-Ола, ул. 70-летия Вооружённых Сил, 20', photo:'', route:'', routeText:'', lat:'', lon:''},
+    {name:'Набережные Челны', hours:'10:00–19:00', tz:'мск',    addr:'Республика Татарстан, г. Набережные Челны, пр. Хасана Туфана, 12, БЦ «2.18»', photo:'', route:'', routeText:'', lat:'', lon:''},
+    {name:'Челябинск',        hours:'11:00–20:00', tz:'мск +2', addr:'Челябинская обл., г. Челябинск, пр. Ленина, 21В', photo:'', route:'', routeText:'', lat:'', lon:''},
   ]
 };
 
@@ -608,8 +611,13 @@ function pillMini(el,kind){
 function validate(){
   const okCity=!!S.city, okAmt=S.give>0&&S.get>0;
   if(S.step===1){
-    const ok=okCity&&okAmt; $('mainBtn').disabled=!ok;
-    $('ctaHint').textContent=!okCity?'Выберите город обмена':!okAmt?'Укажите сумму обмена':'Всё готово — продолжаем';
+    const giveMin = S.dir==='rub2usdt' ? CONFIG.MIN_RUB : CONFIG.MIN_USDT;
+    const minLabel = S.dir==='rub2usdt' ? fmt(CONFIG.MIN_RUB,0)+' ₽' : fmt(CONFIG.MIN_USDT,0)+' USDT';
+    $('minInfo').textContent='Минимальная сумма обмена — '+minLabel;
+    const okMin = S.give>=giveMin;
+    $('minInfo').classList.toggle('bad', S.give>0 && !okMin);
+    const ok=okCity&&okAmt&&okMin; $('mainBtn').disabled=!ok;
+    $('ctaHint').textContent=!okCity?'Выберите город обмена':!okAmt?'Укажите сумму обмена':!okMin?('Минимум — '+minLabel):'Всё готово — продолжаем';
     return ok;
   }
   if(S.step===2){
